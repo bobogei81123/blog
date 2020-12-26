@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Meteor&#39;s blog</title>
+    <link>http://blog.meteor.tw/posts/</link>
+    <description>Recent content in Posts on Meteor&#39;s blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 12 Dec 2020 00:29:37 +0800</lastBuildDate><atom:link href="http://blog.meteor.tw/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Bare Metal Programming on Pinephone -- part 3</title>
+      <link>http://blog.meteor.tw/posts/bare-metal-pinephone-3/</link>
+      <pubDate>Sat, 12 Dec 2020 00:29:37 +0800</pubDate>
+      
+      <guid>http://blog.meteor.tw/posts/bare-metal-pinephone-3/</guid>
+      <description>We can now use U-Boot to load our application image.
+Application Image In part 1, we built a dead-simple Arm64 application. But we probably cannot see any difference on Pinephone if we load a program that only does an addition. Yet, without a proper OS, what we can do is limited.
+I follow the idea to write a test program to toggle the LED. Let&amp;rsquo;s look at PinePhone&amp;rsquo;s mainboard schemetic, which you can find on PinePhone&amp;rsquo;s wiki.</description>
+    </item>
+    
+    <item>
+      <title>Bare Metal Programming on Pinephone -- part 2</title>
+      <link>http://blog.meteor.tw/posts/bare-metal-pinephone-2/</link>
+      <pubDate>Fri, 11 Dec 2020 00:25:43 +0800</pubDate>
+      
+      <guid>http://blog.meteor.tw/posts/bare-metal-pinephone-2/</guid>
+      <description>In part one, we learned how to build a bare-metal program for Arm64. Now, let&amp;rsquo;s try to run the program on Pinephone.
+Boot loader To run our program, we will need a boot loader to load our executable on to the memory. From linux-sunxi wiki, A Allwinner processor is expecting U-Boot on storage devices.
+U-Boot U-Boot is a boot loader for many embedded boards. I follow the guide here to build it.</description>
+    </item>
+    
+    <item>
+      <title>Bare-Metal Programming on Pinephone -- part 1</title>
+      <link>http://blog.meteor.tw/posts/bare-metal-pinephone-1/</link>
+      <pubDate>Tue, 08 Dec 2020 23:28:43 +0800</pubDate>
+      
+      <guid>http://blog.meteor.tw/posts/bare-metal-pinephone-1/</guid>
+      <description>Recently, I got a Pinephone and planned to write a hobby mobile OS for fun. The first step is to see if I can write a bare-metal program onto Pinephone. It turned out to be not very difficult and I will document the steps here for anyone interested.
+Preparation We need several things:
+ A Pinephone, of course. It will be extremely helpful if it has a bootable Linux OS. An USB to serial audio jack connector.</description>
+    </item>
+    
+  </channel>
+</rss>

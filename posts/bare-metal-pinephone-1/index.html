@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<title>Bare-Metal Programming on Pinephone -- part 1 | Meteor&#39;s blog</title>
+<meta charset="utf-8">
+<meta name="generator" content="Hugo 0.78.1" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="http://blog.meteor.tw/css/index.css">
+<link rel="canonical" href="http://blog.meteor.tw/posts/bare-metal-pinephone-1/">
+<link rel="alternate" type="application/rss+xml" href="" title="Meteor&#39;s blog">
+
+<header>
+  
+    <a href="http://blog.meteor.tw/">Meteor&#39;s blog</a>
+  
+  
+</header>
+
+<article>
+  <header>
+    <h1>Bare-Metal Programming on Pinephone -- part 1</h1>
+    <time datetime="2020-12-08T23:28:43&#43;08:00">December 08, 2020</time>
+  </header>
+  <p>Recently, I got a <a href="https://www.pine64.org/pinephone/">Pinephone</a> and planned to
+write a hobby mobile OS for fun. The first step is to see if I can write a
+bare-metal program onto Pinephone. It turned out to be not very difficult and I
+will document the steps here for anyone interested.</p>
+<h1 id="preparation">Preparation</h1>
+<p>We need several things:</p>
+<ol>
+<li>A Pinephone, of course. It will be extremely helpful if it has a bootable
+Linux OS.</li>
+<li>An USB to serial audio jack connector. You can buy one from <a href="https://pine64.com/product/pinebook-pinephone-pinetab-serial-console/?v=0446c16e2e66">Pinephone&rsquo;s
+store</a>
+or get a similar cable (I was able to succeed with a TTL-232R-3V3-AJ cable).</li>
+<li>An SD card.</li>
+</ol>
+<h1 id="building-a-bare-metal-arm64-program">Building a Bare-Metal Arm64 Program</h1>
+<p>First, let&rsquo;s try to build a bare-metal program for Arm64 (AArch64), which is
+the CPU architecture of Pinephone. Arm64 is probably different than what
+we are using on our PCs (x86_64).
+Thus, the first step is to set up a <strong>cross compiler</strong>.</p>
+<h2 id="install-the-cross-compiler">Install the cross compiler</h2>
+<p>The suitable one is prefixed with <code>aarch64-none-elf-</code>. To install the cross
+compiler, either:</p>
+<ol>
+<li>Check your Linux distro package manager. I am using Arch Linux, so some kind
+people have already made a <a href="https://aur.archlinux.org/packages/aarch64-none-elf-gcc-bin">build
+script</a> on AUR.</li>
+<li>Or you can download it from Arm&rsquo;s website
+<a href="https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-a/downloads">here</a>.
+Find &ldquo;AArch64 ELF bare-metal target&rdquo; under &ldquo;x86_64 Linux hosted cross
+compilers&rdquo;. For your convenience, add the <code>bin</code> directory into the <code>PATH</code>
+environment variable.</li>
+</ol>
+<p>You can check if you have successfully install the compiler by running</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ aarch64-none-elf-gcc --version
+aarch64-none-elf-gcc <span style="color:#f92672">(</span>GNU Toolchain <span style="color:#66d9ef">for</span> the A-profile Architecture ...
+</code></pre></div><h2 id="arm64-assembly">Arm64 assembly</h2>
+<p>Let&rsquo;s write our first Arm64 program in assembly. There are several Arm64
+assembly tutorials out there. I went through an awesome guide <a href="http://www.bravegnu.org/gnu-eprog/index.html">&ldquo;Embedded
+Programming with the GNU
+Toolchain&rdquo;</a> (though it is for
+Arm32).</p>
+<p>Open a new file <code>add.s</code> in a directory you like. Add the following lines
+(the syntax highlight for arm asm is broken, sorry!):</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-asm" data-lang="asm"><span style="color:#a6e22e">.text</span>
+start:
+<span style="color:#a6e22e">mov</span>     <span style="color:#66d9ef">x0</span>, <span style="color:#75715e">#1
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">mov</span>     <span style="color:#66d9ef">x1</span>, <span style="color:#75715e">#2
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">add</span>     <span style="color:#66d9ef">x2</span>, <span style="color:#66d9ef">x0</span>, <span style="color:#66d9ef">x1</span>
+stop:
+<span style="color:#a6e22e">b</span>       <span style="color:#66d9ef">stop</span>
+</code></pre></div><p>The program above is fairly simple. We load constant 1 and 2 into registers
+<code>x0</code> and <code>x1</code>, and store their sum into <code>x2</code>.</p>
+<p>Now, let&rsquo;s compile it:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ aarch64-none-elf-as -o add.o add.s
+$ aarch64-none-elf-ld -o add.elf add.o
+$ aarch64-none-elf-objcopy -O binary add.elf add.bin
+</code></pre></div><p>In the first two steps, we compile <code>add.s</code> into ELF, and then use <code>objcopy</code> to
+turn it into raw binary format.</p>
+<h2 id="run-the-program-on-qemu">Run the program on QEMU</h2>
+<p>We have built a simple Arm64 bare metal program. Let&rsquo;s run it on QEMU, a
+machine emulator. Check your linux distro&rsquo;s package manager and install QEMU.
+We need a specialized one <code>qemu-system-aarch64</code> for Arm64.  For Arch Linux, the
+package is called
+<a href="https://archlinux.org/packages/extra/x86_64/qemu-arch-extra/">qemu-arch-extra</a>.</p>
+<p>Run:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel add.bin <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>                      -nographic -serial /dev/null
+</code></pre></div><p>It will lead you to a QEMU monitor</p>
+<pre><code>QEMU 5.1.0 monitor - type 'help' for more information
+(qemu)
+</code></pre><p>Type <code>info registers</code> to get the register values. You should see</p>
+<pre><code>(qemu) info registers
+ PC=000000004008000c X00=0000000000000001 X01=0000000000000002
+X02=0000000000000003 X03=0000000000000000 X04=0000000040080000
+X05=...
+</code></pre><p>Notice the value of <code>X00</code>, <code>X01</code>, and <code>X02</code> are 1, 2, 3, respectively, which
+are the values we are expecting after running our program. This shows that our
+code works on Arm64!</p>
+<h1 id="whats-next">What&rsquo;s next?</h1>
+<p>We have not touched our Pinephone yet. In the next blog, we will build
+U-Boot and create a bootable SD card for our Pinephone.</p>
+
+</article>
+
+
+
+</html>

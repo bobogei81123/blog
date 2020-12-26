@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<title>Bare Metal Programming on Pinephone -- part 2 | Meteor&#39;s blog</title>
+<meta charset="utf-8">
+<meta name="generator" content="Hugo 0.78.1" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="http://blog.meteor.tw/css/index.css">
+<link rel="canonical" href="http://blog.meteor.tw/posts/bare-metal-pinephone-2/">
+<link rel="alternate" type="application/rss+xml" href="" title="Meteor&#39;s blog">
+
+<header>
+  
+    <a href="http://blog.meteor.tw/">Meteor&#39;s blog</a>
+  
+  
+</header>
+
+<article>
+  <header>
+    <h1>Bare Metal Programming on Pinephone -- part 2</h1>
+    <time datetime="2020-12-11T00:25:43&#43;08:00">December 11, 2020</time>
+  </header>
+  <p>In part one, we learned how to build a bare-metal program for Arm64.
+Now, let&rsquo;s try to run the program on Pinephone.</p>
+<h1 id="boot-loader">Boot loader</h1>
+<p>To run our program, we will need a boot loader to load our executable on to the
+memory. From <a href="https://linux-sunxi.org/Boot_Process">linux-sunxi wiki</a>,
+A Allwinner processor is expecting U-Boot on storage devices.</p>
+<h2 id="u-boot">U-Boot</h2>
+<p>U-Boot is a boot loader for many embedded boards.  I follow the guide
+<a href="https://linux-sunxi.org/U-Boot#Compile_U-Boot">here</a> to build it.</p>
+<p>First, download and build ARM Trusted Firmware:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ git clone https://github.com/ARM-software/arm-trusted-firmware.git
+$ cd arm-trusted-firmware
+$ make CROSS_COMPILE<span style="color:#f92672">=</span>aarch64-none-elf- PLAT<span style="color:#f92672">=</span>sun50i_a64 DEBUG<span style="color:#f92672">=</span><span style="color:#ae81ff">1</span> bl31
+$ cd ..
+</code></pre></div><p>Then, download and build U-Boot:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ git clone git://git.denx.de/u-boot.git
+$ cd u-boot
+$ export CROSS_COMPILE<span style="color:#f92672">=</span>aarch64-none-elf-
+$ export BL31<span style="color:#f92672">=</span>../arm-trusted-firmware/build/sun50i_a64/debug/bl31.bin
+<span style="color:#75715e"># Check that $BL31 points to the firmware we built in previous step</span>
+$ make pinephone_defconfig
+$ make
+<span style="color:#75715e"># Or run make -j8 to build with 8 threads</span>
+</code></pre></div><p>You will receive a warning that <code>scp</code> blob is missing, and that should be fine
+(but if it warns <code>atf-bl31</code> is missing, you might forget to set <code>BL31</code>).  Now,
+an <code>u-boot-sunxi-with-spl.bin</code> should appear in the U-Boot directory.</p>
+<h1 id="preparing-a-bootable-sd-card">Preparing a bootable SD Card</h1>
+<p>Now, let&rsquo;s prepare a bootable SD card with U-Boot. There are two ways to do it:</p>
+<ol>
+<li>Use an SD card reader connected to your Linux PC.</li>
+<li>Or, if your Pinephone has Linux installed on it, you can use it as an SD
+card reader.</li>
+</ol>
+<p>I will use the second method below and the first method should be similar.
+Plug an SD card into the pinephone. Switch off the 6th dipswitch as shown in
+the picture below:</p>
+<img src="/bare-metal-pinephone/dipswitch.jpg#center" width="80%" class="center"/>
+<p>When the 6th switch is switched off, the audio jack becomes a debugging serial
+port. Connect your Linux to Pinephone&rsquo;s audio jack using an USB to serial connector.
+You should see from <code>dmesg</code> that a new USB serial device is detected:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ dmesg | tail
+<span style="color:#f92672">[</span> xxx.yyyyyy<span style="color:#f92672">]</span> usb a-b: FTDI USB Serial Device converter now attached to ttyUSB0
+</code></pre></div><p>As you can see, the serial console is <code>/dev/ttyUSB0</code> (change to what is shown
+on your computer). Run:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ screen /dev/ttyUSB0 <span style="color:#ae81ff">115200</span>
+</code></pre></div><p>Turn on the phone, and you should start to see messages coming in. In the end,
+it will prompt for username and password. Log in as the root user. The password
+might depend on what Linux distro you are using <strong>on the Pinephone</strong>.
+For example, I bought the Manjaro edition, and a quick <a href="https://archived.forum.manjaro.org/t/manjaro-arm-alpha4-for-pinephone-and-pinetab/127684">Google
+search</a>
+reveal that the password is <code>root</code>.</p>
+<p>You will also need a way to copy files from PC to Pinephone. There are many
+ways to do it.  I connected my Pinephone to my home WiFi, so it is in the same
+subnet as my PC. I can simply type <code>python -m http.server</code> to open an HTTP file
+server on my PC and download files to Pinephone using <code>curl</code>.</p>
+<h2 id="writing-u-boot-to-the-sd-card">Writing U-Boot to the SD Card</h2>
+<p>Follow the guide <a href="https://linux-sunxi.org/Bootable_SD_card#Bootloader">here</a>.
+Below are the step-by-step instructions:</p>
+<p>Transfer <code>u-boot/u-boot-sunxi-with-spl.bin</code> to your Pinephone.
+Look at the result of <code>lsblk</code>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ lsblk
+mmcblk0      179:0    <span style="color:#ae81ff">0</span>    58G  <span style="color:#ae81ff">0</span> disk 
+mmcblk2      179:32   <span style="color:#ae81ff">0</span>  14.5G  <span style="color:#ae81ff">0</span> disk 
+├─mmcblk2p1  179:33   <span style="color:#ae81ff">0</span> 213.6M  <span style="color:#ae81ff">0</span> part /boot
+└─mmcblk2p2  179:34   <span style="color:#ae81ff">0</span>  14.2G  <span style="color:#ae81ff">0</span> part /
+...
+</code></pre></div><p>Find the device name for your SD card.
+We can see that <code>/dev/mmcblk2</code> is the eMMC on the Pinephone (we are currently
+booting from this device), and <code>/dev/mmcblk0</code> is our SD card. Do the following:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#75715e"># Make sure that the device below is your SD Card.</span>
+<span style="color:#75715e"># Putting a wrong device can corrupt your data on Pinephone!</span>
+$ export CARD<span style="color:#f92672">=</span>/dev/mmcblk0
+$ dd <span style="color:#66d9ef">if</span><span style="color:#f92672">=</span>/dev/zero of<span style="color:#f92672">=</span><span style="color:#e6db74">${</span>CARD<span style="color:#e6db74">}</span> bs<span style="color:#f92672">=</span>1M count<span style="color:#f92672">=</span><span style="color:#ae81ff">1</span>
+$ dd <span style="color:#66d9ef">if</span><span style="color:#f92672">=</span>u-boot-sunxi-with-spl.bin of<span style="color:#f92672">=</span><span style="color:#e6db74">${</span>CARD<span style="color:#e6db74">}</span> bs<span style="color:#f92672">=</span><span style="color:#ae81ff">1024</span> seek<span style="color:#f92672">=</span><span style="color:#ae81ff">8</span>
+$ sync
+$ blockdev --rereadpt <span style="color:#e6db74">${</span>CARD<span style="color:#e6db74">}</span>
+$ cat <span style="color:#e6db74">&lt;&lt;EOT | sfdisk ${CARD}
+</span><span style="color:#e6db74">1M,16M,c
+</span><span style="color:#e6db74">,,L
+</span><span style="color:#e6db74">EOT</span>
+$ mkfs.vfat <span style="color:#e6db74">${</span>CARD<span style="color:#e6db74">}</span>p1
+</code></pre></div><p>We make two partitions in the final few steps (we only need the first partition
+actually). After that, <code>lsblk</code> should look like this:</p>
+<pre><code>mmcblk0      179:0    0    58G  0 disk 
+├─mmcblk0p1  179:1    0    16M  0 part 
+└─mmcblk0p2  179:2    0    58G  0 part 
+</code></pre><h2 id="reboot">Reboot</h2>
+<p>Reboot the Pinephone. Pinephone prioritizes booting from the SD card first,
+which it should if the previous steps are successful.  Quickly press any key to
+interrupt the autoboot.  You should see something like:</p>
+<pre><code>U-Boot SPL 2021.01-rc3-00086-g2a42de6df1 (Dec 11 2020 - 01:08:40 +0800)
+DRAM: 2048 MiB
+Trying to boot from MMC1
+</code></pre><p>If it is booting from MMC1 and the U-Boot built date matches the time you build
+U-Boot, you have successfully made your own U-Boot SD Card!</p>
+<h1 id="whats-next">What&rsquo;s next?</h1>
+<p>In the next blog, we will load our application image with the help of U-Boot.</p>
+
+</article>
+
+
+
+</html>

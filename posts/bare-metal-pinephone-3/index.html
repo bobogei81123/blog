@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<title>Bare Metal Programming on Pinephone -- part 3 | Meteor&#39;s blog</title>
+<meta charset="utf-8">
+<meta name="generator" content="Hugo 0.78.1" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="http://blog.meteor.tw/css/index.css">
+<link rel="canonical" href="http://blog.meteor.tw/posts/bare-metal-pinephone-3/">
+<link rel="alternate" type="application/rss+xml" href="" title="Meteor&#39;s blog">
+
+<header>
+  
+    <a href="http://blog.meteor.tw/">Meteor&#39;s blog</a>
+  
+  
+</header>
+
+<article>
+  <header>
+    <h1>Bare Metal Programming on Pinephone -- part 3</h1>
+    <time datetime="2020-12-12T00:29:37&#43;08:00">December 12, 2020</time>
+  </header>
+  <p>We can now use U-Boot to load our application image.</p>
+<h1 id="application-image">Application Image</h1>
+<p>In <a href="/posts/bare-metal-pinephone-1">part 1</a>, we built a dead-simple Arm64
+application.  But we probably cannot see any difference on Pinephone if we load
+a program that only does an addition. Yet, without a proper OS, what we can do
+is limited.</p>
+<p>I follow <a href="https://redfennec.dev/posts/hpp-exploration-1/">the idea</a> to
+write a test program to toggle the LED. Let&rsquo;s look at PinePhone&rsquo;s <a href="https://files.pine64.org/doc/PinePhone/PinePhone%20v1.2b%20Released%20Schematic.pdf">mainboard
+schemetic</a>,
+which you can find on <a href="https://wiki.pine64.org/index.php/PinePhone">PinePhone&rsquo;s wiki</a>.
+The relevant part is as follows:
+<img src="/bare-metal-pinephone/LED.png" alt="LED spec"></p>
+<p>There are some mistakes in the graph. It turns out that, for instance, <code>PD18</code>
+controls <code>LED-B</code> instead of <code>LED-R</code>.  It should be <code>PD18-LED-B</code>,
+<code>PD19-LED-R</code>, and <code>PD20-LED-G</code> instead.</p>
+<p><code>PD18</code> refers to the 18th pin of the Port D.
+<a href="https://files.pine64.org/doc/datasheet/pine64/Allwinner_A64_User_Manual_V1.0.pdf#page=376">Here</a>
+is the relevant document from Allwinner A64&rsquo;s manual.  I sorted the information
+we need here:</p>
+<ul>
+<li>The base address of PIO is <code>0x01c20800</code></li>
+<li>The offset of PD configure register 2 is <code>0x74</code>, which means that its address is <code>0x01c20874</code>.</li>
+<li>To use PD18 as LED control, we need to set bits <code>10:8</code> to output mode <code>0b001</code>.</li>
+<li>The PD data register is at <code>0x01c2087c</code>.</li>
+<li>We can control the output to <code>PD18</code> by writing to the 18th bit of the data register.</li>
+</ul>
+<h2 id="writing-the-program">Writing the Program</h2>
+<p>I follow the guides <a href="https://lowenware.com/blog/osdev/aarch64-bare-metal-program-in-rust/">here</a>
+and <a href="https://github.com/bztsrc/raspi3-tutorial">here</a>.
+Open <code>led.c</code> and add the following lines:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#75715e">#define outb(addr, val) *(volatile unsigned int *)(addr) = (val)
+</span><span style="color:#75715e"></span>
+<span style="color:#66d9ef">inline</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">sleep</span>() {
+    <span style="color:#66d9ef">for</span> (<span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>; i <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">100000000</span>; <span style="color:#f92672">++</span>i) {
+        <span style="color:#66d9ef">asm</span>(<span style="color:#e6db74">&#34;nop&#34;</span>);
+    }
+}
+
+<span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span>() {
+    <span style="color:#75715e">// set bits 10:8 to 1
+</span><span style="color:#75715e"></span>    outb(<span style="color:#ae81ff">0x01c20874</span>, <span style="color:#ae81ff">0x77777177</span>);
+    <span style="color:#66d9ef">while</span> (<span style="color:#ae81ff">1</span>) {
+        <span style="color:#75715e">// write 1 to PD18
+</span><span style="color:#75715e"></span>        outb(<span style="color:#ae81ff">0x01c2087c</span>, <span style="color:#ae81ff">1u</span> <span style="color:#f92672">&lt;&lt;</span> <span style="color:#ae81ff">18</span>);
+        sleep();
+        <span style="color:#75715e">// write 0 to PD18
+</span><span style="color:#75715e"></span>        outb(<span style="color:#ae81ff">0x01c2087c</span>, <span style="color:#ae81ff">0</span>);
+        sleep();
+    }
+}
+</code></pre></div><p>We also need a startup assembly. Open <code>start.s</code> and add the following:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-asm" data-lang="asm"><span style="color:#a6e22e">.globl</span> <span style="color:#66d9ef">_start</span>
+<span style="color:#a6e22e">.extern</span> <span style="color:#66d9ef">LD_STACK_PTR</span>
+
+<span style="color:#a6e22e">.section</span> <span style="color:#e6db74">&#34;.text.boot&#34;</span>
+
+_start:
+    <span style="color:#a6e22e">ldr</span>     <span style="color:#66d9ef">x30</span>, <span style="color:#960050;background-color:#1e0010">=</span><span style="color:#66d9ef">LD_STACK_PTR</span>
+    <span style="color:#a6e22e">mov</span>     <span style="color:#66d9ef">sp</span>, <span style="color:#66d9ef">x30</span>
+    <span style="color:#a6e22e">bl</span>      <span style="color:#66d9ef">main</span>
+</code></pre></div><p>Notice that we set up only the stack pointer in this startup code and omit a
+lot of other things for normal C programs that are not used here, such as
+clearing out the bss section.</p>
+<p>Finally, create a linker file <code>link.ld</code>:</p>
+<pre><code>ENTRY(_start)
+SECTIONS
+{
+    . = 0x40080000;
+    .text.boot : { *(.text.boot) }
+    .text : { *(.text) }
+    .data : { *(.data) }
+    .rodata : { *(.rodata) }
+    .bss : { *(.bss) }
+
+    . = ALIGN(8);
+    . = . + 0x4000;
+    LD_STACK_PTR = .;
+}
+</code></pre><h2 id="build-the-image">Build the Image</h2>
+<p>Now, it is time to build our image. Add the following Makefile in the same
+directory of these codes.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-makefile" data-lang="makefile">CFLAGS <span style="color:#f92672">=</span> -Wall -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles
+
+<span style="color:#a6e22e">default</span><span style="color:#f92672">:</span> led.uimg
+
+<span style="color:#a6e22e">clean</span><span style="color:#f92672">:</span>
+	rm start.o led.o led led.img
+
+<span style="color:#a6e22e">start.o</span><span style="color:#f92672">:</span> start.s
+	aarch64-none-elf-gcc <span style="color:#66d9ef">$(</span>CFLAGS<span style="color:#66d9ef">)</span> -o start.o -c start.s
+
+<span style="color:#a6e22e">led.o</span><span style="color:#f92672">:</span> led.c
+	aarch64-none-elf-gcc <span style="color:#66d9ef">$(</span>CFLAGS<span style="color:#66d9ef">)</span> -o led.o -c led.c
+
+<span style="color:#a6e22e">led</span><span style="color:#f92672">:</span> start.o led.o
+	aarch64-none-elf-ld -nostdlib -nostartfiles start.o led.o -T link.ld -o led
+
+<span style="color:#a6e22e">led.bin</span><span style="color:#f92672">:</span> led
+	aarch64-none-elf-objcopy -O binary led led.bin
+
+<span style="color:#a6e22e">led.uimg</span><span style="color:#f92672">:</span> led.bin
+	mkimage -A arm64 -C none -O u-boot -T kernel -d led.bin -a 0x40080000 -e 0x40080000 led.uimg
+</code></pre></div><p>Then, run <code>make</code>. You should see <code>led.uimg</code> being produced.  The Makefile first
+create a binary file, and then uses <code>mkimage</code> to convert it into a U-Boot image
+<code>led.uimg</code> (I did not fully understand those parameters for <code>mkimage</code> but it
+doesn&rsquo;t seem to be very important for now).</p>
+<h1 id="loading-image">Loading Image</h1>
+<p>Now it is time to put the image into the SD card and run it.</p>
+<!--Same as in [part 2](/posts/bare-metal-pinephone-2/), -->
+<p>Plug in the SD card and mount the first partition (change <code>mmcblk0p1</code> to what
+pointed to the SD card device).</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ mount /dev/mmcblk0p1 /mnt
+</code></pre></div><p>Copy <code>led.uimg</code> to <code>/mnt</code>. If done correctly, you should see like this:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ ls /mnt
+led.uimg
+</code></pre></div><h1 id="run-the-image">Run the Image</h1>
+<p>Now, plug the SD card into PinePhone if you haven&rsquo;t, and boot it.
+When U-Boot prompts and starts to count down, press any key to interrupt.
+You should see something like</p>
+<pre><code>U-Boot 2021.01-rc3-00086-g2a42de6df1 ... Allwinner Technology
+...
+No working controllers found
+Hit any key to stop autoboot:  0 
+=&gt;
+</code></pre><p>Check if the image is on the SD card:</p>
+<pre><code>=&gt; ls mmc 0:1 /   
+      176   led.uimg
+
+1 file(s), 0 dir(s)
+</code></pre><p>Load and check it:</p>
+<pre><code>=&gt; load mmc 0:1 0x40080000 /led.uimg
+176 bytes read in 1 ms (171.9 KiB/s)
+=&gt; iminfo 0x40080000
+
+## Checking Image at 40080000 ...
+   Legacy image found
+   Image Name:   
+   Image Type:   AArch64 U-Boot Kernel Image (uncompressed)
+   Data Size:    112 Bytes = 112 Bytes
+   Load Address: 40080000
+   Entry Point:  40080000
+   Verifying Checksum ... OK
+</code></pre><p>Finally, run the image:</p>
+<pre><code>bootm 0x40080000
+</code></pre><p>If all things go correctly, you should see the LED starts blinking:</p>
+<p><img src="/bare-metal-pinephone/blink.jpg" alt="LED Blinking"></p>
+<p>And that&rsquo;s it!</p>
+<p><strong>Warning</strong>: Remember to fully shutdown your PinePhone when you are done
+playing with it. PinePhone automatically reboot when the power cable is plugged
+in, and it is easy to miss it and drain your battery when running a custom
+image. I suggest unplugging the battery once you are done.</p>
+
+</article>
+
+
+
+</html>
