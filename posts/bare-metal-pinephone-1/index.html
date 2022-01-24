@@ -1,0 +1,161 @@
+<!doctype html><html lang=en dir=auto>
+<head><meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta name=robots content="index, follow">
+<title>Bare Metal Pinephone 1 | Meteor's Blog</title>
+<meta name=keywords content>
+<meta name=description content="I got a Pinephone and decided to write a hobby mobile OS for fun. The first step is to see if I can write a bare-metal program for it. It turned out to be not very difficult, and I will show you the steps here.
+Preparation We need a couple of things:
+ A Pinephone, of course. A USB to serial audio jack connector. You can buy one from Pine64 store or get a similar cable (I was able to succeed using a TTL-232R-3V3-AJ cable).">
+<meta name=author content="Meteor">
+<link rel=canonical href=https://blog.meteor.tw/posts/bare-metal-pinephone-1/>
+<link crossorigin=anonymous href=/assets/css/stylesheet.min.c88963fe2d79462000fd0fb1b3737783c32855d340583e4523343f8735c787f0.css integrity="sha256-yIlj/i15RiAA/Q+xs3N3g8MoVdNAWD5FIzQ/hzXHh/A=" rel="preload stylesheet" as=style>
+<script defer crossorigin=anonymous src=/assets/js/highlight.min.7680afc38aa6b15ddf158a4f3780b7b1f7dde7e91d26f073e6229bb7a0793c92.js integrity="sha256-doCvw4qmsV3fFYpPN4C3sffd5+kdJvBz5iKbt6B5PJI=" onload=hljs.initHighlightingOnLoad()></script>
+<link rel=icon href=https://blog.meteor.tw/favicon.ico>
+<link rel=icon type=image/png sizes=16x16 href=https://blog.meteor.tw/favicon-16x16.png>
+<link rel=icon type=image/png sizes=32x32 href=https://blog.meteor.tw/favicon-32x32.png>
+<link rel=apple-touch-icon href=https://blog.meteor.tw/apple-touch-icon.png>
+<link rel=mask-icon href=https://blog.meteor.tw/safari-pinned-tab.svg>
+<meta name=theme-color content="#2e2e33">
+<meta name=msapplication-TileColor content="#2e2e33">
+<meta name=generator content="Hugo 0.92.0">
+<noscript>
+<style>#theme-toggle,.top-link{display:none}</style>
+<style>@media(prefers-color-scheme:dark){:root{--theme:rgb(29, 30, 32);--entry:rgb(46, 46, 51);--primary:rgb(218, 218, 219);--secondary:rgb(155, 156, 157);--tertiary:rgb(65, 66, 68);--content:rgb(196, 196, 197);--hljs-bg:rgb(46, 46, 51);--code-bg:rgb(55, 56, 62);--border:rgb(51, 51, 51)}.list{background:var(--theme)}.list:not(.dark)::-webkit-scrollbar-track{background:0 0}.list:not(.dark)::-webkit-scrollbar-thumb{border-color:var(--theme)}}</style>
+</noscript><meta property="og:title" content="Bare Metal Pinephone 1">
+<meta property="og:description" content="I got a Pinephone and decided to write a hobby mobile OS for fun. The first step is to see if I can write a bare-metal program for it. It turned out to be not very difficult, and I will show you the steps here.
+Preparation We need a couple of things:
+ A Pinephone, of course. A USB to serial audio jack connector. You can buy one from Pine64 store or get a similar cable (I was able to succeed using a TTL-232R-3V3-AJ cable).">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://blog.meteor.tw/posts/bare-metal-pinephone-1/"><meta property="article:section" content="posts">
+<meta property="article:published_time" content="2022-01-20T00:37:18-08:00">
+<meta property="article:modified_time" content="2022-01-20T00:37:18-08:00">
+<meta name=twitter:card content="summary">
+<meta name=twitter:title content="Bare Metal Pinephone 1">
+<meta name=twitter:description content="I got a Pinephone and decided to write a hobby mobile OS for fun. The first step is to see if I can write a bare-metal program for it. It turned out to be not very difficult, and I will show you the steps here.
+Preparation We need a couple of things:
+ A Pinephone, of course. A USB to serial audio jack connector. You can buy one from Pine64 store or get a similar cable (I was able to succeed using a TTL-232R-3V3-AJ cable).">
+<script type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Posts","item":"https://blog.meteor.tw/posts/"},{"@type":"ListItem","position":2,"name":"Bare Metal Pinephone 1","item":"https://blog.meteor.tw/posts/bare-metal-pinephone-1/"}]}</script>
+<script type=application/ld+json>{"@context":"https://schema.org","@type":"BlogPosting","headline":"Bare Metal Pinephone 1","name":"Bare Metal Pinephone 1","description":"I got a Pinephone and decided to write a hobby mobile OS for fun. The first step is to see if I can write a bare-metal program for it. It turned out to be not very difficult, and I will show you the steps here.\nPreparation We need a couple of things:\n A Pinephone, of course. A USB to serial audio jack connector. You can buy one from Pine64 store or get a similar cable (I was able to succeed using a TTL-232R-3V3-AJ cable).","keywords":[],"articleBody":"I got a Pinephone and decided to write a hobby mobile OS for fun. The first step is to see if I can write a bare-metal program for it. It turned out to be not very difficult, and I will show you the steps here.\nPreparation We need a couple of things:\n A Pinephone, of course. A USB to serial audio jack connector. You can buy one from Pine64 store or get a similar cable (I was able to succeed using a TTL-232R-3V3-AJ cable). An SD card.  Building a bare-metal Arm64 program First, let’s try to build a bare-metal program for Arm64 (AArch64), which is the CPU architecture of Pinephone. My computer’s CPU architecture is x86-64 (which is probably the one most people are using), and we will have to set up a cross compiler to compile for another architecture different than our PC.\nInstalling the cross compiler GCC provides multiple cross compiler for different architecture. For bare-metal programming in Arm64, the one we need is aarch64-none-elf-gcc.\n Check your Linux distro’s package manager. I use Arch Linux, and some kind people have already made a build script to install the toolchain. Or you can download it from Arm’s website here. Find “AArch64 ELF bare-metal target” under “x86_64 Linux hosted cross compilers”. Extract the tar file, and for your convenience, add the bin directory into the $PATH environment variable.  You can check if you have successfully install the compiler by running the following command:\n$ aarch64-none-elf-gcc --version aarch64-none-elf-gcc (GNU Toolchain for the A-profile Architecture ... Writing an Arm64 assembly Now, let’s write a simple Arm64 program in assembly. There are several Arm64 assembly tutorials out there, and I went through an awesome guide [“Embedded Programming with the GNU Toolchain”] (Though the tutorial is for Arm32).\nCreate a new file add.s in a directory. Add the following lines:\n.text start: mov x0, #1 mov x1, #2 add x2, x0, x1 stop: b stop The program above is fairly simple. We load constant 1 and 2 into registers x0 and x1, and store their sum 3 into x2. Now, let’s compile it:\n$ aarch64-none-elf-as -o add.o add.s $ aarch64-none-elf-ld -o add.elf add.o $ aarch64-none-elf-objcopy -O binary add.elf add.bin In the first two steps, we compile add.s into ELF, and then use objcopy to turn it into raw binary format.\nRun the program on QEMU Let’s try to run the simple bare-metal program we just wrote on QEMU, a machine emulator. Use your Linux distro’s package manager to install QEMU. Notice that we need a specialized one qemu-system-aarch64 to emulate Arm64 machines. For Arch Linux, the package name is qemu-arch-extra.\nRun the following command:\n$ qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel add.bin \\  -nographic -serial /dev/null This will open a QEMU monitor:\nQEMU 6.2.0 monitor - type 'help' for more information (qemu) Type info registers to show register values:\n(qemu) info registers PC=000000004008000c X00=0000000000000001 X01=0000000000000002 X02=0000000000000003 X03=0000000000000000 X04=0000000040080000 Notice the value of X00, X01, and X02 are 1, 2, 3, respectively, which are the values we will expect after running the program. This shows that our code have successfully run on Arm64!\nIn the next post, I will walk through how to set up a bootloader on pinephone for loading bare-metal programs.\n","wordCount":"538","inLanguage":"en","datePublished":"2022-01-20T00:37:18-08:00","dateModified":"2022-01-20T00:37:18-08:00","author":{"@type":"Person","name":"Meteor"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://blog.meteor.tw/posts/bare-metal-pinephone-1/"},"publisher":{"@type":"Organization","name":"Meteor's Blog","logo":{"@type":"ImageObject","url":"https://blog.meteor.tw/favicon.ico"}}}</script>
+</head>
+<body id=top>
+<script>localStorage.getItem("pref-theme")==="dark"?document.body.classList.add('dark'):localStorage.getItem("pref-theme")==="light"?document.body.classList.remove('dark'):window.matchMedia('(prefers-color-scheme: dark)').matches&&document.body.classList.add('dark')</script>
+<header class=header>
+<nav class=nav>
+<div class=logo>
+<a href=https://blog.meteor.tw/ accesskey=h title="Meteor's Blog (Alt + H)">Meteor's Blog</a>
+<span class=logo-switches>
+<button id=theme-toggle accesskey=t title="(Alt + T)"><svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg><svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+</button>
+</span>
+</div>
+<ul id=menu>
+</ul>
+</nav>
+</header>
+<main class=main>
+<article class=post-single>
+<header class=post-header>
+<h1 class=post-title>
+Bare Metal Pinephone 1
+</h1>
+<div class=post-meta><span title="2022-01-20 00:37:18 -0800 -0800">January 20, 2022</span>&nbsp;·&nbsp;Meteor
+</div>
+</header>
+<div class=post-content><p>I got a <a href=https://www.pine64.org/pinephone/>Pinephone</a> and decided to write a
+hobby mobile OS for fun. The first step is to see if I can write a bare-metal
+program for it. It turned out to be not very difficult, and I will show you the
+steps here.</p>
+<h2 id=preparation>Preparation<a hidden class=anchor aria-hidden=true href=#preparation>#</a></h2>
+<p>We need a couple of things:</p>
+<ol>
+<li>A Pinephone, of course.</li>
+<li>A USB to serial audio jack connector. You can buy one from <a href=https://pine64.com/product/pinebook-pinephone-pinetab-serial-console/>Pine64
+store</a>
+or get a similar cable (I was able to succeed using a TTL-232R-3V3-AJ
+cable).</li>
+<li>An SD card.</li>
+</ol>
+<h2 id=building-a-bare-metal-arm64-program>Building a bare-metal Arm64 program<a hidden class=anchor aria-hidden=true href=#building-a-bare-metal-arm64-program>#</a></h2>
+<p>First, let’s try to build a bare-metal program for Arm64 (AArch64), which is
+the CPU architecture of Pinephone. My computer&rsquo;s CPU architecture is x86-64
+(which is probably the one most people are using), and we will have to set up a
+cross compiler to compile for another architecture different than our PC.</p>
+<h3 id=installing-the-cross-compiler>Installing the cross compiler<a hidden class=anchor aria-hidden=true href=#installing-the-cross-compiler>#</a></h3>
+<p>GCC provides multiple cross compiler for different architecture. For bare-metal
+programming in Arm64, the one we need is <code>aarch64-none-elf-gcc</code>.</p>
+<ol>
+<li>Check your Linux distro&rsquo;s package manager. I use Arch Linux, and some kind
+people have already made a <a href=https://aur.archlinux.org/packages/aarch64-none-elf-gcc-bin>build
+script</a> to
+install the toolchain.</li>
+<li>Or you can download it from Arm’s website
+<a href=https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-a/downloads>here</a>.
+Find “AArch64 ELF bare-metal target” under “x86_64 Linux hosted cross
+compilers”. Extract the tar file, and for your convenience, add the bin
+directory into the <code>$PATH</code> environment variable.</li>
+</ol>
+<p>You can check if you have successfully install the compiler by running the
+following command:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ aarch64-none-elf-gcc --version
+aarch64-none-elf-gcc <span style=color:#f92672>(</span>GNU Toolchain <span style=color:#66d9ef>for</span> the A-profile Architecture ...
+</code></pre></div><h3 id=writing-an-arm64-assembly>Writing an Arm64 assembly<a hidden class=anchor aria-hidden=true href=#writing-an-arm64-assembly>#</a></h3>
+<p>Now, let&rsquo;s write a simple Arm64 program in assembly. There are several Arm64
+assembly tutorials out there, and I went through an awesome guide [&ldquo;Embedded
+Programming with the GNU Toolchain&rdquo;] (Though the tutorial is for Arm32).</p>
+<p>Create a new file <code>add.s</code> in a directory. Add the following lines:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-armasm data-lang=armasm><span style=color:#f92672>.text</span>
+start:
+mov     <span style=color:#a6e22e>x0</span>, #<span style=color:#ae81ff>1</span>
+mov     <span style=color:#a6e22e>x1</span>, #<span style=color:#ae81ff>2</span>
+add     <span style=color:#a6e22e>x2</span>, <span style=color:#a6e22e>x0</span>, <span style=color:#a6e22e>x1</span>
+stop:
+b       <span style=color:#960050;background-color:#1e0010>stop</span>
+</code></pre></div><p>The program above is fairly simple. We load constant 1 and 2 into registers
+<code>x0</code> and <code>x1</code>, and store their sum 3 into <code>x2</code>. Now, let’s compile it:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ aarch64-none-elf-as -o add.o add.s
+$ aarch64-none-elf-ld -o add.elf add.o
+$ aarch64-none-elf-objcopy -O binary add.elf add.bin
+</code></pre></div><p>In the first two steps, we compile add.s into ELF, and then use <code>objcopy</code> to turn
+it into raw binary format.</p>
+<h2 id=run-the-program-on-qemu>Run the program on QEMU<a hidden class=anchor aria-hidden=true href=#run-the-program-on-qemu>#</a></h2>
+<p>Let’s try to run the simple bare-metal program we just wrote on QEMU, a machine
+emulator. Use your Linux distro’s package manager to install QEMU. Notice that
+we need a specialized one <code>qemu-system-aarch64</code> to emulate Arm64 machines.
+For Arch Linux, the package name is <code>qemu-arch-extra</code>.</p>
+<p>Run the following command:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ qemu-system-aarch64 -M virt -cpu cortex-a53 -kernel add.bin <span style=color:#ae81ff>\
+</span><span style=color:#ae81ff></span>                      -nographic -serial /dev/null
+</code></pre></div><p>This will open a QEMU monitor:</p>
+<pre tabindex=0><code>QEMU 6.2.0 monitor - type 'help' for more information
+(qemu)
+</code></pre><p>Type <code>info registers</code> to show register values:</p>
+<pre tabindex=0><code>(qemu) info registers
+ PC=000000004008000c X00=0000000000000001 X01=0000000000000002
+X02=0000000000000003 X03=0000000000000000 X04=0000000040080000
+</code></pre><p>Notice the value of X00, X01, and X02 are 1, 2, 3, respectively, which are the
+values we will expect after running the program. This shows that our code
+have successfully run on Arm64!</p>
+<p>In the next post, I will walk through how to set up a bootloader on pinephone
+for loading bare-metal programs.</p>
+</div>
+<footer class=post-footer>
+</footer>
+</article>
+</main>
+<footer class=footer>
+<span>&copy; 2022 <a href=https://blog.meteor.tw/>Meteor's Blog</a></span>
+<span>
+Powered by
+<a href=https://gohugo.io/ rel="noopener noreferrer" target=_blank>Hugo</a> &
+        <a href=https://git.io/hugopapermod rel=noopener target=_blank>PaperMod</a>
+</span>
+</footer>
+<a href=#top aria-label="go to top" title="Go to Top (Alt + G)" class=top-link id=top-link accesskey=g><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentcolor"><path d="M12 6H0l6-6z"/></svg>
+</a>
+<script>let menu=document.getElementById('menu');menu&&(menu.scrollLeft=localStorage.getItem("menu-scroll-position"),menu.onscroll=function(){localStorage.setItem("menu-scroll-position",menu.scrollLeft)}),document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener("click",function(b){b.preventDefault();var a=this.getAttribute("href").substr(1);window.matchMedia('(prefers-reduced-motion: reduce)').matches?document.querySelector(`[id='${decodeURIComponent(a)}']`).scrollIntoView():document.querySelector(`[id='${decodeURIComponent(a)}']`).scrollIntoView({behavior:"smooth"}),a==="top"?history.replaceState(null,null," "):history.pushState(null,null,`#${a}`)})})</script>
+<script>var mybutton=document.getElementById("top-link");window.onscroll=function(){document.body.scrollTop>800||document.documentElement.scrollTop>800?(mybutton.style.visibility="visible",mybutton.style.opacity="1"):(mybutton.style.visibility="hidden",mybutton.style.opacity="0")}</script>
+<script>document.getElementById("theme-toggle").addEventListener("click",()=>{document.body.className.includes("dark")?(document.body.classList.remove('dark'),localStorage.setItem("pref-theme",'light')):(document.body.classList.add('dark'),localStorage.setItem("pref-theme",'dark'))})</script>
+</body>
+</html>
