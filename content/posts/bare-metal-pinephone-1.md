@@ -1,7 +1,6 @@
 ---
 title: "Bare Metal Pinephone 1"
 date: 2022-01-20T00:37:18-08:00
-draft: true
 ---
 
 I got a [Pinephone](https://www.pine64.org/pinephone/) and decided to write a
