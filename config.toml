@@ -1,0 +1,8 @@
+baseURL = 'https://blog.meteor.tw/'
+languageCode = 'en-us'
+title = "Meteor's Blog"
+theme = 'PaperMod'
+
+[params]
+author = 'Meteor'
+defaultTheme = 'auto'
